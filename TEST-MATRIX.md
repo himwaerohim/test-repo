@@ -45,3 +45,24 @@ A team is always written `@org/team`, so a team owner can only resolve inside th
 organisation. In a personal repository every team reference is unresolvable and is
 dropped without error. Confirming the individual-and-team shape requires an
 organisation repository.
+
+## Observed results — 2026-08-27
+
+| # | Expected | Observed | |
+|---|----------|----------|---|
+| 1 | not engaged | `named-approvers: SUCCESS` | as expected |
+| 2 | blocks | `named-approvers: FAILURE` | as expected |
+| 3 | blocks | `named-approvers: FAILURE` | as expected |
+| 4 | not engaged | `named-approvers: SUCCESS` | **confirms the real gap** |
+| 5 | not engaged | `named-approvers: SUCCESS` | as expected |
+
+Case C is confirmed directly by the CODEOWNERS errors API, with no second account
+needed. All three unresolvable owners are reported as "Unknown owner" and dropped
+silently rather than blocking the merge:
+
+    line 11: @purett — does not exist or lacks write access
+    line 20: @flowaccount/team-infrastructure — cannot resolve outside its org
+    line 20: @not-a-real-user-99x — does not exist
+
+This is the decisive argument for keeping a workflow alongside CODEOWNERS. A
+CODEOWNERS-only lock naming people who lack write access is silently unarmed.
