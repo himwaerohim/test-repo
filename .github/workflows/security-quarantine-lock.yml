@@ -1,0 +1,71 @@
+name: security-quarantine-lock
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  named-approvers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every named approver on the security boundary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          # Keep in step with the named owners in .github/CODEOWNERS.
+          APPROVERS=(himwaerohim purett)
+          BOUNDARY=(
+            'boundary/killswitch.txt'
+            'boundary/quarantine.txt'
+            '.github/CODEOWNERS'
+            '.github/workflows/security-quarantine-lock.yml'
+          )
+
+          gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" --jq '.[].filename' > /tmp/changed.txt
+
+          echo "Files changed by this pull request:"
+          sed 's/^/  /' /tmp/changed.txt
+
+          : > /tmp/touched.txt
+          for path in "${BOUNDARY[@]}"; do
+            if grep -Fxq "${path}" /tmp/changed.txt; then echo "${path}" >> /tmp/touched.txt; fi
+          done
+
+          if [ ! -s /tmp/touched.txt ]; then
+            echo "No security-boundary file in this pull request. Lock not engaged."
+            exit 0
+          fi
+
+          echo "Security-boundary files changed by this pull request:"
+          sed 's/^/  /' /tmp/touched.txt
+
+          gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
+            --jq ".[] | select(.state == \"APPROVED\" and .commit_id == \"${HEAD_SHA}\") | .user.login" \
+            | tr '[:upper:]' '[:lower:]' | sort -u > /tmp/approved.txt
+
+          echo "Approvals of the current head commit:"
+          sed 's/^/  /' /tmp/approved.txt
+
+          missing=()
+          for approver in "${APPROVERS[@]}"; do
+            if ! grep -Fxq "${approver}" /tmp/approved.txt; then missing+=("${approver}"); fi
+          done
+
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Missing approval of ${HEAD_SHA} from: ${missing[*]}"
+            echo "Every named approver must approve the current head commit, not an earlier one."
+            exit 1
+          fi
+
+          echo "All named approvers have approved ${HEAD_SHA}."

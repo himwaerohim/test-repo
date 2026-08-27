@@ -1,0 +1,24 @@
+# Test fixture for the SEC-003 code-owner lock. Each block below isolates one
+# CODEOWNERS semantic that the real lock in flowaccount.dotnet.workspace depends on.
+# See TEST-MATRIX.md for the expected result of each case.
+
+# Case A - baseline: the repo owner owns everything not matched more specifically.
+*                           @himwaerohim
+
+# Case B - LAST match wins, and it REPLACES rather than unions.
+# boundary/killswitch.txt appears to gain a second owner here, but the broader
+# /boundary/ line below overrides this line completely.
+/boundary/killswitch.txt    @himwaerohim @purett
+
+# Case B (continued) - this line is later, so it is the one that applies.
+/boundary/                  @himwaerohim
+
+# Case C - owners GitHub cannot resolve are silently dropped, not an error that
+# blocks the merge. A team from another organisation can never resolve in a
+# personal repository, which is why the "individual AND team" shape cannot be
+# reproduced outside an org.
+/unresolvable/              @himwaerohim @flowaccount/team-infrastructure @not-a-real-user-99x
+
+# Case D - a nested exact path, to contrast CODEOWNERS glob matching against the
+# workflow's fixed-string grep -Fxq boundary list.
+/globtest/nested/deep.txt   @himwaerohim
